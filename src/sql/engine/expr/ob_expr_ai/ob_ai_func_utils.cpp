@@ -171,8 +171,14 @@ int ObOpenAIUtils::ObOpenAIComplete::parse_output(common::ObIAllocator &allocato
     ObJsonSeekResult hit;
     if (OB_FAIL(j_path.parse_path())) {
     } else if (OB_FAIL(j_tree->seek(j_path, j_path.path_node_cnt(), false, false, hit))) {
-    } else if (hit.size() == 0) {
+    } else if (hit.size() == 0 || OB_ISNULL(hit[0])) {
       ret = OB_INVALID_DATA;
+    } else if (hit[0]->json_type() != ObJsonNodeType::J_STRING
+               || static_cast<ObJsonString *>(hit[0])->get_str().empty()) {
+      // A blank completion is not a usable answer, report it instead of returning
+      // an empty string to the caller.
+      ret = OB_INVALID_DATA;
+      LOG_USER_ERROR(OB_INVALID_DATA, "ai_complete, model returned an empty response");
     } else {
       result = hit[0];
     }
@@ -327,8 +333,14 @@ int ObOllamaUtils::ObOllamaComplete::parse_output(common::ObIAllocator &allocato
     ObJsonSeekResult hit;
     if (OB_FAIL(j_path.parse_path())) {
     } else if (OB_FAIL(j_tree->seek(j_path, j_path.path_node_cnt(), false, false, hit))) {
-    } else if (hit.size() == 0) {
+    } else if (hit.size() == 0 || OB_ISNULL(hit[0])) {
       ret = OB_ERR_UNEXPECTED;
+    } else if (hit[0]->json_type() != ObJsonNodeType::J_STRING
+               || static_cast<ObJsonString *>(hit[0])->get_str().empty()) {
+      // Ollama reports an empty generation the same way as an upstream failure: do not
+      // hand an empty string back to the caller.
+      ret = OB_INVALID_DATA;
+      LOG_USER_ERROR(OB_INVALID_DATA, "ai_complete, model returned an empty response");
     } else {
       result = hit[0];
     }
